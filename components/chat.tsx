@@ -46,10 +46,10 @@ export function Chat({ profile }: ChatProps) {
       : "";
 
   const routesShown = hasRoutes(lastAssistantText);
-  const suggestionChips = getDynamicChips(lastAssistantText, routesShown);
+  const suggestionChipGroups = getDynamicChips(lastAssistantText, routesShown);
 
   const showChips =
-    suggestionChips.length > 0 &&
+    suggestionChipGroups.length > 0 &&
     !isLoading &&
     lastMessage?.role === "assistant" &&
     !chipsHidden;
@@ -143,7 +143,7 @@ export function Chat({ profile }: ChatProps) {
 
       {showChips && (
         <SuggestionChips
-          chips={suggestionChips}
+          groups={suggestionChipGroups}
           onSelect={handleChipSelect}
           disabled={isLoading}
         />

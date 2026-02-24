@@ -6,6 +6,12 @@ import {
   detectLoopRequest,
 } from "@/lib/direct-route";
 import { buildNavUrl, buildWalkingDirectionsUrl } from "@/lib/parse-routes";
+import {
+  getAnchorCity,
+  buildAnchorContext,
+  inferDistanceTier,
+  ANCHOR_ROUTES,
+} from "@/lib/anchor-routes";
 
 export const maxDuration = 30;
 
@@ -93,6 +99,10 @@ You MUST use these exact values:
 
 Include 2-4 highlights tags (e.g. "Scenic Views", "Well Lit", "Flat Terrain").
 
+## DISTANCE & SCENIC EXTENSION
+- Respect the user's requested distance: Short (~5 km), Medium (8–12 km), Long (15–21.1 km).
+- If the user mentioned a target distance and the direct A-to-B is shorter than that, suggest a **scenic extension**: e.g. "Run from [A] to [B], then continue for a loop around [nearby park/area] to complete ~X km."
+
 ${ROUTE_DATA_INSTRUCTIONS}
 ${nightBlock()}${profileBlock(userName, userLevel)}
 
@@ -101,10 +111,21 @@ RULES: English only. Be concise. No questions. Output <route_data> as the very l
 
 // ─── LOOP/RADIUS MODE ───
 function buildLoopPrompt(location: string, distanceOrTime: string, userName?: string, userLevel?: string): string {
+  const anchorCity = getAnchorCity(location);
+  const distanceTier = inferDistanceTier(distanceOrTime);
+  const anchorBlock =
+    anchorCity !== null
+      ? `\n${buildAnchorContext(anchorCity, distanceTier ?? undefined)}\nUse the routes above as the basis for your 3 loop suggestions — adapt names and descriptions to match the user's target (${distanceOrTime}).`
+      : `\n## OTHER CITIES (not in Anchor DB)\nIf "${location}" is not Petah Tikva, Tel Aviv, Jerusalem, or Haifa, use your knowledge of real, popular running routes in that city (e.g. The Promenade in Rishon LeZion, Cliff Park in Netanya, beach promenades in Ashdod). Only suggest routes that actually exist.\n`;
+
   return `You are "RunIsrael AI Expert" — a professional running coach and route assistant in Israel.
 
 ## MODE: CIRCULAR LOOP
 The user wants circular routes starting and ending at "${location}" with a target of ${distanceOrTime}. Skip ALL questions. Provide 3 different loop routes immediately.
+
+## DISTANCE ADAPTATION
+Respect requested distance: Short (~5 km), Medium (8–12 km), Long (15–21.1 km). Match your 3 routes to the user's target (${distanceOrTime}).
+${anchorBlock}
 
 Your reply has TWO parts:
 
@@ -135,11 +156,33 @@ RULES: English only. Be concise. No questions. Suggest 3 DIFFERENT circular rout
 
 // ─── SURVEY MODE ───
 function buildSurveyPrompt(userName?: string, userLevel?: string): string {
+  const anchorDbText = Object.entries(ANCHOR_ROUTES)
+    .map(
+      ([city, tiers]) =>
+        `**${city}**: Short — ${tiers.short.join("; ")}. Medium — ${tiers.medium.join("; ")}. Long — ${tiers.long.join("; ")}.`
+    )
+    .join("\n");
+
   return `You are "RunIsrael AI Expert" — a professional running coach and route assistant in Israel.
 
 ## MODE: TAILOR-MADE (SURVEY)
 
 Your job is to learn the user's preferences through a SHORT series of questions, then recommend 3 perfect routes.
+
+## ROUTE SELECTION LOGIC (PRIORITY)
+1. **Specific A-to-B**: If the user asks for a route from a specific street/landmark to another, ignore presets and create a custom path between them. If they also mention a target distance and A-to-B is shorter, suggest a scenic extension (e.g. loop around a nearby park to complete the distance).
+2. **General city — Anchor**: If the user asks for a general area that is **Petah Tikva, Tel Aviv, Jerusalem, or Haifa**, use the **Anchor Routes Database** below for maximum accuracy.
+3. **General city — Other**: If the user asks for a city NOT in the anchor list (e.g. Rishon LeZion, Ashdod, Netanya), use your knowledge of real, popular running routes in that city (e.g. The Promenade in Rishon, Cliff Park in Netanya, beach promenades in Ashdod).
+
+## ANCHOR ROUTES DATABASE (use for Petah Tikva, Tel Aviv, Jerusalem, Haifa)
+${anchorDbText}
+
+## DISTANCE ADAPTATION
+Respect the user's requested distance:
+- **Short**: ~5 km
+- **Medium**: 8–12 km
+- **Long**: 15–21.1 km (half marathon)
+Match your 3 recommendations to the chosen tier.
 
 ## CONVERSATION FLOW
 
@@ -166,7 +209,7 @@ IMPORTANT: Ask ONLY ONE question per message. Be encouraging, concise, and use e
 
 ### Phase 2: Recommend Routes
 
-Once you have ALL preferences (city + elevation + water + accessibility + shade + distance), output 3 route recommendations. Match the route distances to the user's chosen range (under 5 km, 5–10 km, or ~21 km).
+Once you have ALL preferences (city + elevation + water + accessibility + shade + distance), output 3 route recommendations. Use the Anchor Database for Petah Tikva / Tel Aviv / Jerusalem / Haifa; for other cities suggest real popular routes (e.g. Rishon Promenade, Netanya Cliff Park). Match the route distances to the user's chosen range (Short ~5 km, Medium 8–12 km, Long ~21 km).
 
 Your reply has TWO parts:
 

@@ -19,12 +19,19 @@ export const CITY_CHIPS: SuggestionChip[] = [
   { id: "eilat", label: "🏖️ Eilat", text: "Eilat" },
 ];
 
-const CHIP_RULES: { keywords: string[]; chips: SuggestionChip[] }[] = [
+export interface ChipGroup {
+  category: string;
+  chips: SuggestionChip[];
+}
+
+const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[] }[] = [
   {
+    category: "City",
     keywords: ["which city", "what city", "where would you like to run"],
     chips: CITY_CHIPS,
   },
   {
+    category: "Elevation",
     keywords: ["elevation", "hills", "flat or"],
     chips: [
       { id: "flat", label: "🏃 Flat", text: "Flat" },
@@ -33,6 +40,7 @@ const CHIP_RULES: { keywords: string[]; chips: SuggestionChip[] }[] = [
     ],
   },
   {
+    category: "Water",
     keywords: ["water fountain", "water along", "need water"],
     chips: [
       { id: "water-yes", label: "💧 Yes, need water", text: "Yes, I need water fountains" },
@@ -40,6 +48,7 @@ const CHIP_RULES: { keywords: string[]; chips: SuggestionChip[] }[] = [
     ],
   },
   {
+    category: "Accessibility",
     keywords: ["stroller", "dog friendly", "dog-friendly", "accessible"],
     chips: [
       { id: "stroller", label: "👶 Stroller-friendly", text: "Stroller-friendly" },
@@ -48,6 +57,7 @@ const CHIP_RULES: { keywords: string[]; chips: SuggestionChip[] }[] = [
     ],
   },
   {
+    category: "Shade",
     keywords: ["shade", "sun exposure", "shaded"],
     chips: [
       { id: "full-shade", label: "🌳 Full Shade", text: "Full shade" },
@@ -56,6 +66,7 @@ const CHIP_RULES: { keywords: string[]; chips: SuggestionChip[] }[] = [
     ],
   },
   {
+    category: "Route type",
     keywords: ["route type", "circular loop", "point-to-point"],
     chips: [
       { id: "loop", label: "🔄 Circular Loop", text: "Circular loop" },
@@ -63,6 +74,7 @@ const CHIP_RULES: { keywords: string[]; chips: SuggestionChip[] }[] = [
     ],
   },
   {
+    category: "Surface",
     keywords: ["surface", "paved", "asphalt", "terrain"],
     chips: [
       { id: "asphalt", label: "🛣️ Asphalt", text: "Asphalt" },
@@ -72,6 +84,7 @@ const CHIP_RULES: { keywords: string[]; chips: SuggestionChip[] }[] = [
     ],
   },
   {
+    category: "Distance",
     keywords: ["distance", "how far", "how long", "kilometers", "kilometer", "how many km"],
     chips: [
       { id: "under5", label: "📏 Under 5 km", text: "Under 5 km" },
@@ -81,23 +94,21 @@ const CHIP_RULES: { keywords: string[]; chips: SuggestionChip[] }[] = [
   },
 ];
 
-export function getDynamicChips(text: string, hasRoutes: boolean): SuggestionChip[] {
+/** Returns all chip groups whose keywords appear in the message (e.g. City + Distance). */
+export function getDynamicChips(text: string, hasRoutes: boolean): ChipGroup[] {
   if (!text || typeof text !== "string") return [];
 
-  if (hasRoutes) return [RESET_CHIP];
+  if (hasRoutes) return [{ category: "", chips: [RESET_CHIP] }];
 
   const lower = text.toLowerCase();
-  let best = { index: -1, chips: [] as SuggestionChip[] };
+  const groups: ChipGroup[] = [];
 
-  for (const { keywords, chips } of CHIP_RULES) {
-    for (const kw of keywords) {
-      const pos = lower.lastIndexOf(kw);
-      if (pos !== -1 && pos > best.index) {
-        best = { index: pos, chips };
-      }
-    }
+  for (const { category, keywords, chips } of CHIP_RULES) {
+    const matched = keywords.some((kw) => lower.includes(kw));
+    if (matched) groups.push({ category, chips });
   }
 
-  if (best.chips.length === 0) return [];
-  return [...best.chips, RESET_CHIP];
+  if (groups.length === 0) return [];
+  groups.push({ category: "", chips: [RESET_CHIP] });
+  return groups;
 }

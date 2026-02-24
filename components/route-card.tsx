@@ -8,6 +8,7 @@ import {
   Footprints,
   MapPin,
   Flag,
+  MessageCircle,
   Navigation,
   Route as RouteIcon,
   TreePine,
@@ -122,12 +123,12 @@ export function RouteCard({ route, index }: RouteCardProps) {
         )}
 
         {/* Navigation buttons */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <a
             href={route.nav_to_start}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1"
+            className="flex-1 min-w-0"
           >
             <Button
               variant="outline"
@@ -142,7 +143,7 @@ export function RouteCard({ route, index }: RouteCardProps) {
             href={route.view_full_route}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1"
+            className="flex-1 min-w-0"
           >
             <Button
               variant="outline"
@@ -151,6 +152,25 @@ export function RouteCard({ route, index }: RouteCardProps) {
             >
               <RouteIcon className="mr-1.5 h-3.5 w-3.5" />
               View Full Route
+            </Button>
+          </a>
+          <a
+            href={`https://wa.me/?text=${encodeURIComponent(
+              `Check out this ${route.distance} run: ${route.name}. Start here: ${route.nav_to_start}`
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Share route"
+            className="shrink-0"
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-lime-500 bg-transparent text-lime-400 hover:bg-lime-500/20 hover:border-lime-400 hover:text-lime-300"
+              aria-label="Share route"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:ml-1.5">Share route</span>
             </Button>
           </a>
         </div>
