@@ -27,7 +27,16 @@ export interface ChipGroup {
 const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[] }[] = [
   {
     category: "City",
-    keywords: ["which city", "what city", "where would you like to run"],
+    keywords: [
+      "which city",
+      "what city",
+      "where would you like to run",
+      "where would you like to start",
+      "start your run",
+      "where to start",
+      "landmark",
+      "popular area",
+    ],
     chips: CITY_CHIPS,
   },
   {
@@ -85,7 +94,24 @@ const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[
   },
   {
     category: "Distance",
-    keywords: ["distance", "how far", "how long", "kilometers", "kilometer", "how many km"],
+    keywords: [
+      "distance",
+      "how far",
+      "how long",
+      "kilometers",
+      "kilometer",
+      "how many km",
+      "desired distance",
+      "your distance",
+      "which one sounds",
+      "which one",
+      "short (about",
+      "medium (about",
+      "long (about",
+      "5-10 km",
+      "10-15 km",
+      "15-21 km",
+    ],
     chips: [
       { id: "under5", label: "📏 Under 5 km", text: "Under 5 km" },
       { id: "five-ten", label: "📏 5–10 km", text: "5 to 10 km" },
@@ -94,21 +120,48 @@ const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[
   },
 ];
 
-/** Returns all chip groups whose keywords appear in the message (e.g. City + Distance). */
+/** Returns the last question/segment of the message (so we show chips only for that). */
+function getLastSegment(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  // Split by sentence-ending punctuation, take last segment
+  const segments = trimmed.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
+  const last = segments[segments.length - 1];
+  if (last) return last;
+  // Fallback: last ~250 chars (covers one short paragraph)
+  return trimmed.length > 250 ? trimmed.slice(-250) : trimmed;
+}
+
+/** Returns only chip groups that match the *last* question in the message (one category max). */
 export function getDynamicChips(text: string, hasRoutes: boolean): ChipGroup[] {
   if (!text || typeof text !== "string") return [];
 
   if (hasRoutes) return [{ category: "", chips: [RESET_CHIP] }];
 
-  const lower = text.toLowerCase();
-  const groups: ChipGroup[] = [];
+  const lastSegment = getLastSegment(text).toLowerCase();
+  const fullLower = text.toLowerCase();
 
+  // Prefer match in last segment only; if none, allow match in full message for backwards compatibility
   for (const { category, keywords, chips } of CHIP_RULES) {
-    const matched = keywords.some((kw) => lower.includes(kw));
-    if (matched) groups.push({ category, chips });
+    const matchInLast = keywords.some((kw) => lastSegment.includes(kw));
+    if (matchInLast) {
+      return [{ category, chips }, { category: "", chips: [RESET_CHIP] }];
+    }
   }
-
-  if (groups.length === 0) return [];
-  groups.push({ category: "", chips: [RESET_CHIP] });
-  return groups;
+  // Fallback: pick the category whose keyword appears *latest* in the message (current topic)
+  let bestIndex = -1;
+  let bestGroup: ChipGroup | null = null;
+  for (const { category, keywords, chips } of CHIP_RULES) {
+    for (const kw of keywords) {
+      const idx = fullLower.lastIndexOf(kw);
+      if (idx !== -1 && idx > bestIndex) {
+        bestIndex = idx;
+        bestGroup = { category, chips };
+      }
+    }
+  }
+  if (bestGroup) {
+    return [bestGroup, { category: "", chips: [RESET_CHIP] }];
+  }
+  return [];
 }

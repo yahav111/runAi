@@ -93,13 +93,20 @@ export function RouteCard({ route, index }: RouteCardProps) {
           {route.description}
         </p>
 
-        {/* Start & End landmarks */}
+        {/* Start, optional waypoint (turnaround), End */}
         <div className="mb-3 space-y-1.5 rounded-lg bg-slate-900/50 p-2.5">
           <div className="flex items-center gap-2 text-xs text-slate-300">
             <MapPin className="h-3.5 w-3.5 shrink-0 text-lime-400" />
             <span className="font-medium text-slate-400">Start:</span>
             <span>{route.start_point}</span>
           </div>
+          {route.waypoint && (
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <Repeat className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+              <span className="font-medium text-slate-400">Turnaround:</span>
+              <span>{route.waypoint}</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 text-xs text-slate-300">
             <Flag className="h-3.5 w-3.5 shrink-0 text-rose-400" />
             <span className="font-medium text-slate-400">Finish:</span>
@@ -122,8 +129,19 @@ export function RouteCard({ route, index }: RouteCardProps) {
           </div>
         )}
 
-        {/* Navigation buttons */}
+        {/* Out-and-back hint when waypoint is set */}
+        {route.waypoint && (
+          <p className="mb-3 text-[11px] text-slate-500">
+            Map shows the leg to the turnaround; run back the same way to the start.
+          </p>
+        )}
+
+        {/* Navigation buttons — only show when we have valid map URLs */}
+        {((route.nav_to_start?.startsWith("http") ?? false) ||
+          (route.nav_to_end?.startsWith("http") ?? false) ||
+          (route.view_full_route?.startsWith("http") ?? false)) && (
         <div className="flex flex-wrap items-center gap-2">
+          {route.nav_to_start?.startsWith("http") && (
           <a
             href={route.nav_to_start}
             target="_blank"
@@ -139,6 +157,25 @@ export function RouteCard({ route, index }: RouteCardProps) {
               Navigate to Start
             </Button>
           </a>
+          )}
+          {route.nav_to_end?.startsWith("http") && (
+          <a
+            href={route.nav_to_end}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 min-w-0"
+          >
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full border-slate-600 bg-slate-700/50 text-slate-200 hover:bg-slate-600 hover:text-white"
+            >
+              <Navigation className="mr-1.5 h-3.5 w-3.5" />
+              Navigate to End
+            </Button>
+          </a>
+          )}
+          {route.view_full_route?.startsWith("http") && (
           <a
             href={route.view_full_route}
             target="_blank"
@@ -151,9 +188,10 @@ export function RouteCard({ route, index }: RouteCardProps) {
               className="w-full border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 hover:text-lime-300"
             >
               <RouteIcon className="mr-1.5 h-3.5 w-3.5" />
-              View Full Route
+              {route.waypoint ? "View route to turnaround" : "View Full Route"}
             </Button>
           </a>
+          )}
           <a
             href={`https://wa.me/?text=${encodeURIComponent(
               `Check out this ${route.distance} run: ${route.name}. Start here: ${route.nav_to_start}`
@@ -174,6 +212,7 @@ export function RouteCard({ route, index }: RouteCardProps) {
             </Button>
           </a>
         </div>
+        )}
       </CardContent>
     </Card>
   );
