@@ -63,6 +63,7 @@ Example route object:
 - Use clean, human-friendly Markdown only for the visible text.
 - The <route_data> block must be the very last thing. Nothing after </route_data>.
 - Do NOT wrap <route_data> in code fences.
+- CRITICAL: Without the <route_data> block the app cannot show the route card (Navigate to Start, View Full Route). Always output it.
 `;
 
 // ─── POINT-TO-POINT MODE ───

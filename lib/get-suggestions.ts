@@ -132,8 +132,15 @@ function getLastSegment(text: string): string {
   return trimmed.length > 250 ? trimmed.slice(-250) : trimmed;
 }
 
+/** "point-to-point" | "loop" when user already chose route type at start; omit to show Route type chips. */
+export type InitialRouteType = "point-to-point" | "loop";
+
 /** Returns only chip groups that match the *last* question in the message (one category max). */
-export function getDynamicChips(text: string, hasRoutes: boolean): ChipGroup[] {
+export function getDynamicChips(
+  text: string,
+  hasRoutes: boolean,
+  initialRouteType?: InitialRouteType | null
+): ChipGroup[] {
   if (!text || typeof text !== "string") return [];
 
   if (hasRoutes) return [{ category: "", chips: [RESET_CHIP] }];
@@ -141,8 +148,12 @@ export function getDynamicChips(text: string, hasRoutes: boolean): ChipGroup[] {
   const lastSegment = getLastSegment(text).toLowerCase();
   const fullLower = text.toLowerCase();
 
+  const skipRouteType = (category: string) =>
+    category === "Route type" && initialRouteType != null;
+
   // Prefer match in last segment only; if none, allow match in full message for backwards compatibility
   for (const { category, keywords, chips } of CHIP_RULES) {
+    if (skipRouteType(category)) continue;
     const matchInLast = keywords.some((kw) => lastSegment.includes(kw));
     if (matchInLast) {
       return [{ category, chips }, { category: "", chips: [RESET_CHIP] }];
@@ -152,6 +163,7 @@ export function getDynamicChips(text: string, hasRoutes: boolean): ChipGroup[] {
   let bestIndex = -1;
   let bestGroup: ChipGroup | null = null;
   for (const { category, keywords, chips } of CHIP_RULES) {
+    if (skipRouteType(category)) continue;
     for (const kw of keywords) {
       const idx = fullLower.lastIndexOf(kw);
       if (idx !== -1 && idx > bestIndex) {

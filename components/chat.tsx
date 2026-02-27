@@ -46,7 +46,19 @@ export function Chat({ profile }: ChatProps) {
       : "";
 
   const routesShown = hasRoutes(lastAssistantText);
-  const suggestionChipGroups = getDynamicChips(lastAssistantText, routesShown);
+  const initialRouteType = (() => {
+    const firstUser = messages.find((m) => m.role === "user");
+    if (!firstUser) return null;
+    const firstText = firstUser.parts
+      .filter((p): p is { type: "text"; text: string } => p.type === "text")
+      .map((p) => p.text)
+      .join("")
+      .toLowerCase();
+    if (firstText.includes("point-to-point") || firstText.includes("point to point")) return "point-to-point" as const;
+    if (firstText.includes("circular loop") || firstText.includes("circular loop run")) return "loop" as const;
+    return null;
+  })();
+  const suggestionChipGroups = getDynamicChips(lastAssistantText, routesShown, initialRouteType);
 
   const showChips =
     suggestionChipGroups.length > 0 &&

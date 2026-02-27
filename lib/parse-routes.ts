@@ -25,6 +25,8 @@ export interface RoutesSegment {
 export type MessageSegment = TextSegment | RoutesSegment;
 
 const ROUTE_DATA_RE = /<route_data>([\s\S]*?)<\/route_data>/;
+/** Match <route_data> without closing tag (e.g. stream cut off) */
+const ROUTE_DATA_OPEN_RE = /<route_data>([\s\S]*)$/;
 const DATA_HIDDEN_RE = /<data_hidden>([\s\S]*?)<\/data_hidden>/;
 const ROUTES_TAG = "[ROUTES_JSON:";
 
@@ -35,10 +37,35 @@ function stripCodeFences(text: string): string {
     .replace(/\n?```\s*\n?/g, "\n");
 }
 
+/** Try to trim trailing garbage to get a parseable JSON array. */
+function tryTrimToValidArray(s: string): string | null {
+  let str = s.trim();
+  for (let i = str.length - 1; i >= 0; i--) {
+    if (str[i] !== "]") continue;
+    const candidate = str.slice(0, i + 1);
+    try {
+      const parsed = JSON.parse(sanitiseJson(candidate));
+      if (Array.isArray(parsed) && parsed.length > 0) return candidate;
+    } catch {
+      // continue
+    }
+  }
+  return null;
+}
+
 function extractRouteData(text: string): { full: string; json: string } | null {
   const m = text.match(ROUTE_DATA_RE);
-  if (!m) return null;
-  return { full: m[0], json: m[1].trim() };
+  if (m) return { full: m[0], json: m[1].trim() };
+  const open = text.match(ROUTE_DATA_OPEN_RE);
+  if (open) {
+    const raw = open[1].trim();
+    const arrMatch = raw.match(/(\[\s*\{[\s\S]*)\s*$/);
+    if (arrMatch) {
+      const json = tryTrimToValidArray(arrMatch[1]);
+      if (json) return { full: text.slice(text.indexOf("<route_data>")), json };
+    }
+  }
+  return null;
 }
 
 function extractDataHidden(text: string): { full: string; json: string } | null {
@@ -145,9 +172,9 @@ export function buildWalkingDirectionsUrl(origin: string, destination: string): 
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=walking`;
 }
 
-/** Match one emoji route block (name through post-run treat). Description may be multi-line. */
+/** Match one emoji route block (name through post-run treat). Description may be multi-line. Accepts "Finish" or "End" and flexible post-run label. */
 const EMOJI_ROUTE_BLOCK =
-  /🏅\s*([^\n]+)\s*\n\s*📏\s*Distance:\s*([^\n]+)\s*\n\s*🏃\s*Surface:\s*([^\n]+)\s*\n\s*🔁\s*Type:\s*([^\n]+)\s*\n\s*📍\s*Start:\s*([^\n]+)\s*\n\s*🏁\s*Finish:\s*([^\n]+)\s*\n\s*📝\s*([\s\S]+?)\s*\n\s*☕\s*Post-run treat:\s*([^\n]+)/gi;
+  /🏅\s*([^\n]+)\s*\n\s*📏\s*Distance:\s*([^\n]+)\s*\n\s*🏃\s*Surface:\s*([^\n]+)\s*\n\s*🔁\s*Type:\s*([^\n]+)\s*\n\s*📍\s*Start:\s*([^\n]+)\s*\n\s*🏁\s*(?:Finish|End):\s*([^\n]+)\s*\n\s*📝\s*([\s\S]+?)\s*\n\s*☕\s*(?:Post-run treat|Post-run):\s*([^\n]+)/gi;
 
 function parseSurface(s: string): Route["surface"] {
   const lower = s.toLowerCase();
@@ -272,6 +299,46 @@ function tryParseRoutes(jsonStr: string): Route[] | null {
 }
 
 /**
+ * When the model describes a route in prose without <route_data> or emoji block, try to extract
+ * Start, Finish/End, distance and optional description so we still show the route card.
+ */
+function parseLooseRouteFromProse(content: string): Route | null {
+  const startMatch = content.match(/(?:Start|start):\s*([^\n]+)/i);
+  const finishMatch = content.match(/(?:Finish|Finish point|End|end):\s*([^\n]+)/i);
+  const distanceMatch = content.match(/(\d+(?:\.\d+)?)\s*km/i);
+  if (!startMatch?.[1]?.trim() || !finishMatch?.[1]?.trim() || !distanceMatch) return null;
+
+  const start_point = startMatch[1].trim();
+  const end_point = finishMatch[1].trim();
+  const distance = `${distanceMatch[1]} km`;
+
+  let description = "Route as described.";
+  const descMatch = content.match(/(?:Description of the path|Description):\s*([^\n]+(?:\n[^\n]+)?)/i);
+  if (descMatch?.[1]?.trim()) description = descMatch[1].trim().slice(0, 500);
+
+  let post_run_treat = "Ask a local!";
+  const treatMatch = content.match(/Post-run treat:\s*([^\n]+)/i) ?? content.match(/Enjoy\s+([^.\n]+)/i);
+  if (treatMatch?.[1]?.trim()) post_run_treat = treatMatch[1].trim().slice(0, 200);
+
+  const nameMatch = content.match(/(?:Israel |Suggested )?(?:Coastal |Running )?Route\s*[:\s]*([^\n]+?)(?=\s*\n|$)/i);
+  const name = (nameMatch?.[1]?.trim() && nameMatch[1].length < 60) ? nameMatch[1].trim() : "Suggested route";
+
+  return {
+    name,
+    distance,
+    surface: "Asphalt",
+    route_type: "Point-to-Point",
+    start_point,
+    end_point,
+    nav_to_start: buildNavUrl(start_point),
+    view_full_route: buildRouteUrl(start_point, end_point),
+    description,
+    post_run_treat,
+    highlights: [],
+  };
+}
+
+/**
  * Remove emoji route blocks from text so we can show intro/outro without duplicating route content.
  */
 function stripEmojiRouteBlocks(text: string): string {
@@ -316,6 +383,16 @@ export function parseMessageContent(content: string): MessageSegment[] {
     return segments;
   }
 
+  // Fallback: prose that clearly describes one route (Start/Finish + distance) — build one card so it always shows
+  const looseRoute = parseLooseRouteFromProse(norm);
+  if (looseRoute) {
+    const cleaned = cleanVisibleText(norm);
+    const segments: MessageSegment[] = [];
+    if (cleaned) segments.push({ type: "text", content: cleaned });
+    segments.push({ type: "routes", routes: [looseRoute] });
+    return segments;
+  }
+
   return [{ type: "text", content: cleanVisibleText(content) }];
 }
 
@@ -333,9 +410,11 @@ function cleanVisibleText(text: string): string {
 export function hasRoutes(text: string): boolean {
   return (
     ROUTE_DATA_RE.test(text) ||
+    ROUTE_DATA_OPEN_RE.test(text) ||
     DATA_HIDDEN_RE.test(text) ||
     text.includes(ROUTES_TAG) ||
     /\[\s*\{[^}]*"(?:nav_to_start|waze_link|view_full_route)"/.test(text) ||
-    (parseRoutesFromEmojiText(text)?.length ?? 0) > 0
+    (parseRoutesFromEmojiText(text)?.length ?? 0) > 0 ||
+    parseLooseRouteFromProse(stripCodeFences(text)) !== null
   );
 }
