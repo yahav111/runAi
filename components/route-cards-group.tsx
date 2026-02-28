@@ -1,7 +1,7 @@
 "use client";
 
 import { RouteCard } from "@/components/route-card";
-import type { Route } from "@/lib/parse-routes";
+import type { Route } from "@/lib/types";
 import { MapPin } from "lucide-react";
 
 interface RouteCardsGroupProps {

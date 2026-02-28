@@ -1,7 +1,8 @@
 "use client";
 
 import type { UIMessage } from "ai";
-import { parseMessageContent, type MessageSegment } from "@/lib/parse-routes";
+import type { MessageSegment } from "@/lib/types";
+import { parseMessageContent } from "@/lib/parsing";
 import { RouteCardsGroup } from "@/components/route-cards-group";
 import { Footprints } from "lucide-react";
 

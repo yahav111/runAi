@@ -1,9 +1,8 @@
-/**
- * Detects intent from user input and routes to the correct workflow:
- * - Point-to-Point: "From [A] to [B]"
- * - Loop/Radius: "[distance/time] around/from [location]"
- * - Survey: everything else (vague input)
- */
+import type {
+  DirectRouteRequest,
+  LoopRouteRequest,
+  RouteIntent,
+} from "@/lib/types";
 
 const FROM_TO_RE = /from\s+(.+?)\s+to\s+(.+)/i;
 
@@ -13,22 +12,9 @@ const LOOP_PATTERNS = [
   /(?:around|near|from|at)\s+(.+?)\s*[,\-–]\s*(\d+(?:\.\d+)?\s*(?:km|k|miles?|mi|minutes?|mins?|hours?|hrs?))/i,
 ];
 
-export interface DirectRouteRequest {
-  from: string;
-  to: string;
-}
-
-export interface LoopRouteRequest {
-  location: string;
-  distanceOrTime: string;
-}
-
-export type RouteIntent =
-  | { type: "point-to-point"; data: DirectRouteRequest }
-  | { type: "loop"; data: LoopRouteRequest }
-  | { type: "survey" };
-
-export function detectDirectRouteRequest(text: string): DirectRouteRequest | null {
+export function detectDirectRouteRequest(
+  text: string
+): DirectRouteRequest | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
 
@@ -53,11 +39,13 @@ export function detectLoopRequest(text: string): LoopRouteRequest | null {
     if (re === LOOP_PATTERNS[2]) {
       const location = m[1].trim();
       const distanceOrTime = m[2].trim();
-      if (location.length >= 2 && distanceOrTime) return { location, distanceOrTime };
+      if (location.length >= 2 && distanceOrTime)
+        return { location, distanceOrTime };
     } else {
       const distanceOrTime = m[1].trim();
       const location = m[2].trim();
-      if (location.length >= 2 && distanceOrTime) return { location, distanceOrTime };
+      if (location.length >= 2 && distanceOrTime)
+        return { location, distanceOrTime };
     }
   }
   return null;

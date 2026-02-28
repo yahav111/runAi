@@ -1,9 +1,10 @@
-export interface SuggestionChip {
-  id: string;
-  label: string;
-  text: string;
-  variant?: "default" | "reset";
-}
+import type {
+  SuggestionChip,
+  ChipGroup,
+  InitialRouteType,
+} from "@/lib/types";
+
+export type { SuggestionChip, ChipGroup, InitialRouteType };
 
 export const RESET_CHIP: SuggestionChip = {
   id: "__reset__",
@@ -19,12 +20,13 @@ export const CITY_CHIPS: SuggestionChip[] = [
   { id: "eilat", label: "🏖️ Eilat", text: "Eilat" },
 ];
 
-export interface ChipGroup {
+interface ChipRule {
   category: string;
+  keywords: string[];
   chips: SuggestionChip[];
 }
 
-const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[] }[] = [
+const CHIP_RULES: ChipRule[] = [
   {
     category: "City",
     keywords: [
@@ -32,8 +34,11 @@ const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[
       "what city",
       "where would you like to run",
       "where would you like to start",
-      "start your run",
+      "where you'd like to start",
+      "start and finish",
       "where to start",
+      "where to start and finish",
+      "start your run",
       "landmark",
       "popular area",
     ],
@@ -52,17 +57,33 @@ const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[
     category: "Water",
     keywords: ["water fountain", "water along", "need water"],
     chips: [
-      { id: "water-yes", label: "💧 Yes, need water", text: "Yes, I need water fountains" },
-      { id: "water-no", label: "🚫 No, I carry my own", text: "No, I carry my own water" },
+      {
+        id: "water-yes",
+        label: "💧 Yes, need water",
+        text: "Yes, I need water fountains",
+      },
+      {
+        id: "water-no",
+        label: "🚫 No, I carry my own",
+        text: "No, I carry my own water",
+      },
     ],
   },
   {
     category: "Accessibility",
     keywords: ["stroller", "dog friendly", "dog-friendly", "accessible"],
     chips: [
-      { id: "stroller", label: "👶 Stroller-friendly", text: "Stroller-friendly" },
+      {
+        id: "stroller",
+        label: "👶 Stroller-friendly",
+        text: "Stroller-friendly",
+      },
       { id: "dog", label: "🐕 Dog-friendly", text: "Dog-friendly" },
-      { id: "neither", label: "🏃 Neither needed", text: "No special accessibility needed" },
+      {
+        id: "neither",
+        label: "🏃 Neither needed",
+        text: "No special accessibility needed",
+      },
     ],
   },
   {
@@ -70,8 +91,16 @@ const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[
     keywords: ["shade", "sun exposure", "shaded"],
     chips: [
       { id: "full-shade", label: "🌳 Full Shade", text: "Full shade" },
-      { id: "partial-shade", label: "⛅ Partial Shade", text: "Partial shade" },
-      { id: "open-sun", label: "☀️ Open / No Preference", text: "Open sun is fine" },
+      {
+        id: "partial-shade",
+        label: "⛅ Partial Shade",
+        text: "Partial shade",
+      },
+      {
+        id: "open-sun",
+        label: "☀️ Open / No Preference",
+        text: "Open sun is fine",
+      },
     ],
   },
   {
@@ -113,29 +142,37 @@ const CHIP_RULES: { category: string; keywords: string[]; chips: SuggestionChip[
       "15-21 km",
     ],
     chips: [
-      { id: "under5", label: "📏 Under 5 km", text: "Under 5 km" },
-      { id: "five-ten", label: "📏 5–10 km", text: "5 to 10 km" },
-      { id: "twenty-one", label: "📏 21 km (half marathon)", text: "21 km (half marathon)" },
+      {
+        id: "short",
+        label: "📏 Short (up to 4 km)",
+        text: "Short – up to 4 km",
+      },
+      {
+        id: "medium",
+        label: "📏 Medium (4–8 km)",
+        text: "Medium – 4 to 8 km",
+      },
+      {
+        id: "long",
+        label: "📏 Long (8+ km)",
+        text: "Long – 8 km or more",
+      },
     ],
   },
 ];
 
-/** Returns the last question/segment of the message (so we show chips only for that). */
 function getLastSegment(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return "";
-  // Split by sentence-ending punctuation, take last segment
-  const segments = trimmed.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
+  const segments = trimmed
+    .split(/[.!?]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
   const last = segments[segments.length - 1];
   if (last) return last;
-  // Fallback: last ~250 chars (covers one short paragraph)
   return trimmed.length > 250 ? trimmed.slice(-250) : trimmed;
 }
 
-/** "point-to-point" | "loop" when user already chose route type at start; omit to show Route type chips. */
-export type InitialRouteType = "point-to-point" | "loop";
-
-/** Returns only chip groups that match the *last* question in the message (one category max). */
 export function getDynamicChips(
   text: string,
   hasRoutes: boolean,
@@ -151,7 +188,6 @@ export function getDynamicChips(
   const skipRouteType = (category: string) =>
     category === "Route type" && initialRouteType != null;
 
-  // Prefer match in last segment only; if none, allow match in full message for backwards compatibility
   for (const { category, keywords, chips } of CHIP_RULES) {
     if (skipRouteType(category)) continue;
     const matchInLast = keywords.some((kw) => lastSegment.includes(kw));
@@ -159,7 +195,7 @@ export function getDynamicChips(
       return [{ category, chips }, { category: "", chips: [RESET_CHIP] }];
     }
   }
-  // Fallback: pick the category whose keyword appears *latest* in the message (current topic)
+
   let bestIndex = -1;
   let bestGroup: ChipGroup | null = null;
   for (const { category, keywords, chips } of CHIP_RULES) {

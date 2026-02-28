@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,8 @@ import {
   Repeat,
   ArrowRight,
 } from "lucide-react";
-import type { Route } from "@/lib/parse-routes";
+import type { Route } from "@/lib/types";
+import { correctDistanceIfNeeded } from "@/lib/route-distance";
 
 interface RouteCardProps {
   route: Route;
@@ -31,15 +33,39 @@ const surfaceConfig: Record<string, { icon: React.ReactNode; label: string }> =
     Mixed: { icon: <span className="text-xs">🔀</span>, label: "Mixed" },
   };
 
+const TOLERANCE_PERCENT = 30;
+
 export function RouteCard({ route, index }: RouteCardProps) {
   const surface = surfaceConfig[route.surface] || surfaceConfig.Mixed;
   const isLoop = route.route_type === "Loop";
+
+  const [displayDistance, setDisplayDistance] = useState<string>(route.distance);
+  useEffect(() => {
+    setDisplayDistance(route.distance);
+    if (isLoop || route.start_point === route.end_point) return;
+
+    const origin = encodeURIComponent(route.start_point);
+    const destination = encodeURIComponent(route.end_point);
+    const url = `/api/route-distance?origin=${origin}&destination=${destination}`;
+
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { distance_km?: number } | null) => {
+        if (data?.distance_km == null) return;
+        const corrected = correctDistanceIfNeeded(
+          route.distance,
+          data.distance_km,
+          TOLERANCE_PERCENT
+        );
+        if (corrected) setDisplayDistance(corrected);
+      })
+      .catch(() => {});
+  }, [route.distance, route.start_point, route.end_point, isLoop]);
 
   return (
     <Card className="overflow-hidden border border-slate-600/50 bg-slate-800/90 shadow-xl shadow-black/25 backdrop-blur-sm transition-all hover:border-lime-500/30 hover:shadow-2xl">
       <div className="h-1 bg-gradient-to-r from-lime-500 via-lime-400 to-lime-500" />
       <CardContent className="p-4">
-        {/* Header */}
         <div className="mb-3 flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-lime-500/15 text-xs font-bold text-lime-400">
@@ -53,11 +79,10 @@ export function RouteCard({ route, index }: RouteCardProps) {
             variant="outline"
             className="shrink-0 border-lime-500/30 bg-lime-500/10 text-lime-400"
           >
-            {route.distance}
+            {displayDistance}
           </Badge>
         </div>
 
-        {/* Badges: surface + route type */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-600/50 bg-slate-700/30 px-2 py-1 text-xs font-medium text-slate-300">
             <Footprints className="h-3 w-3" />
@@ -73,7 +98,6 @@ export function RouteCard({ route, index }: RouteCardProps) {
           </div>
         </div>
 
-        {/* Highlights */}
         {route.highlights && route.highlights.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1.5">
             {route.highlights.map((tag) => (
@@ -88,12 +112,10 @@ export function RouteCard({ route, index }: RouteCardProps) {
           </div>
         )}
 
-        {/* Description */}
         <p className="mb-3 text-sm leading-relaxed text-slate-300">
           {route.description}
         </p>
 
-        {/* Start, optional waypoint (turnaround), End */}
         <div className="mb-3 space-y-1.5 rounded-lg bg-slate-900/50 p-2.5">
           <div className="flex items-center gap-2 text-xs text-slate-300">
             <MapPin className="h-3.5 w-3.5 shrink-0 text-lime-400" />
@@ -114,7 +136,6 @@ export function RouteCard({ route, index }: RouteCardProps) {
           </div>
         </div>
 
-        {/* Post-run treat */}
         {route.post_run_treat && (
           <div className="mb-3 flex items-start gap-2 rounded-lg bg-slate-900/50 p-2.5">
             <Coffee className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
@@ -129,89 +150,92 @@ export function RouteCard({ route, index }: RouteCardProps) {
           </div>
         )}
 
-        {/* Out-and-back hint when waypoint is set */}
         {route.waypoint && (
           <p className="mb-3 text-[11px] text-slate-500">
-            Map shows the leg to the turnaround; run back the same way to the start.
+            Map shows the leg to the turnaround; run back the same way to the
+            start.
           </p>
         )}
 
-        {/* Navigation buttons — only show when we have valid map URLs */}
         {((route.nav_to_start?.startsWith("http") ?? false) ||
           (route.nav_to_end?.startsWith("http") ?? false) ||
           (route.view_full_route?.startsWith("http") ?? false)) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {route.nav_to_start?.startsWith("http") && (
-          <a
-            href={route.nav_to_start}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 min-w-0"
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-slate-600 bg-slate-700/50 text-slate-200 hover:bg-slate-600 hover:text-white"
+          <div className="flex flex-wrap items-center gap-2">
+            {route.nav_to_start?.startsWith("http") && (
+              <a
+                href={route.nav_to_start}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-0"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-slate-600 bg-slate-700/50 text-slate-200 hover:bg-slate-600 hover:text-white"
+                >
+                  <Navigation className="mr-1.5 h-3.5 w-3.5" />
+                  Navigate to Start
+                </Button>
+              </a>
+            )}
+            {route.nav_to_end?.startsWith("http") && (
+              <a
+                href={route.nav_to_end}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-0"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-slate-600 bg-slate-700/50 text-slate-200 hover:bg-slate-600 hover:text-white"
+                >
+                  <Navigation className="mr-1.5 h-3.5 w-3.5" />
+                  Navigate to End
+                </Button>
+              </a>
+            )}
+            {route.view_full_route?.startsWith("http") && (
+              <a
+                href={route.view_full_route}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 min-w-0"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 hover:text-lime-300"
+                >
+                  <RouteIcon className="mr-1.5 h-3.5 w-3.5" />
+                  {route.waypoint
+                    ? "View route to turnaround"
+                    : "View Full Route"}
+                </Button>
+              </a>
+            )}
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `Check out this ${displayDistance} run: ${route.name}. Start here: ${route.nav_to_start}`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Share route"
+              className="shrink-0"
             >
-              <Navigation className="mr-1.5 h-3.5 w-3.5" />
-              Navigate to Start
-            </Button>
-          </a>
-          )}
-          {route.nav_to_end?.startsWith("http") && (
-          <a
-            href={route.nav_to_end}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 min-w-0"
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-slate-600 bg-slate-700/50 text-slate-200 hover:bg-slate-600 hover:text-white"
-            >
-              <Navigation className="mr-1.5 h-3.5 w-3.5" />
-              Navigate to End
-            </Button>
-          </a>
-          )}
-          {route.view_full_route?.startsWith("http") && (
-          <a
-            href={route.view_full_route}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 min-w-0"
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-lime-500/30 bg-lime-500/10 text-lime-400 hover:bg-lime-500/20 hover:text-lime-300"
-            >
-              <RouteIcon className="mr-1.5 h-3.5 w-3.5" />
-              {route.waypoint ? "View route to turnaround" : "View Full Route"}
-            </Button>
-          </a>
-          )}
-          <a
-            href={`https://wa.me/?text=${encodeURIComponent(
-              `Check out this ${route.distance} run: ${route.name}. Start here: ${route.nav_to_start}`
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Share route"
-            className="shrink-0"
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-lime-500 bg-transparent text-lime-400 hover:bg-lime-500/20 hover:border-lime-400 hover:text-lime-300"
-              aria-label="Share route"
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-              <span className="sr-only sm:not-sr-only sm:ml-1.5">Share route</span>
-            </Button>
-          </a>
-        </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-lime-500 bg-transparent text-lime-400 hover:bg-lime-500/20 hover:border-lime-400 hover:text-lime-300"
+                aria-label="Share route"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                <span className="sr-only sm:not-sr-only sm:ml-1.5">
+                  Share route
+                </span>
+              </Button>
+            </a>
+          </div>
         )}
       </CardContent>
     </Card>
