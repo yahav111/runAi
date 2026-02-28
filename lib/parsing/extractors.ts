@@ -12,9 +12,38 @@ const ROUTES_TAG = "[ROUTES_JSON:";
 
 export { ROUTE_DATA_RE, ROUTE_DATA_OPEN_RE, DATA_HIDDEN_RE, ROUTES_TAG };
 
+function mergeJsonParts(parts: string[]): string {
+  const items: string[] = [];
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith("[")) {
+      const inner = trimmed.slice(1, trimmed.lastIndexOf("]")).trim();
+      if (inner) items.push(inner);
+    } else if (trimmed.startsWith("{")) {
+      items.push(trimmed);
+    }
+  }
+  return `[${items.join(",")}]`;
+}
+
 export function extractRouteData(text: string): Extraction | null {
-  const m = text.match(ROUTE_DATA_RE);
-  if (m) return { full: m[0], json: m[1].trim() };
+  const globalRe = new RegExp(ROUTE_DATA_RE.source, "g");
+  const matches = [...text.matchAll(globalRe)];
+
+  if (matches.length === 1) {
+    return { full: matches[0][0], json: matches[0][1].trim() };
+  }
+
+  if (matches.length > 1) {
+    const jsonParts = matches.map((m) => m[1].trim());
+    const firstStart = text.indexOf(matches[0][0]);
+    const lastMatch = matches[matches.length - 1];
+    const lastEnd = text.lastIndexOf(lastMatch[0]) + lastMatch[0].length;
+    return {
+      full: text.slice(firstStart, lastEnd),
+      json: mergeJsonParts(jsonParts),
+    };
+  }
 
   const open = text.match(ROUTE_DATA_OPEN_RE);
   if (open) {

@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { SURVEY_CATEGORIES } from "@/lib/constants/survey-categories";
-import { KNOWN_CITIES } from "@/lib/constants/cities";
+import { KNOWN_CITIES, CITY_ALIASES } from "@/lib/constants/cities";
 
 export function getMessageText(msg: UIMessage): string {
   const parts = (msg as { parts?: Array<{ type: string; text?: string }> })
@@ -26,6 +26,7 @@ export function getLastUserMessageText(messages: UIMessage[]): string {
 export function looksLikeCityOnly(text: string): boolean {
   const t = text.trim().toLowerCase();
   if (t.length > 50) return false;
+  if (t in CITY_ALIASES) return true;
   return KNOWN_CITIES.some(
     (city) =>
       t === city || t.startsWith(city + " ") || t === city.replace(" ", "")
@@ -44,7 +45,8 @@ export function getAnsweredPreferences(
     const userText = getMessageText(messages[i]).trim();
     if (!userText) continue;
     if (!out.city && looksLikeCityOnly(userText)) {
-      out.city = userText.trim();
+      const resolved = CITY_ALIASES[userText.trim().toLowerCase()];
+      out.city = resolved ?? userText.trim();
     }
     for (const cat of SURVEY_CATEGORIES) {
       if (out[cat.key]) continue;

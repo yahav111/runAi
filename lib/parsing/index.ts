@@ -31,12 +31,29 @@ export function parseMessageContent(content: string): MessageSegment[] {
       const segments: MessageSegment[] = [];
       const startIdx = norm.indexOf(full);
       const before = norm.slice(0, startIdx).trim();
-      if (before)
-        segments.push({ type: "text", content: cleanVisibleText(before) });
-      segments.push({ type: "routes", routes });
       const after = norm.slice(startIdx + full.length).trim();
-      if (after)
-        segments.push({ type: "text", content: cleanVisibleText(after) });
+      const allText = [before, after].filter(Boolean).join("\n");
+
+      const extraRoutes = parseRoutesFromEmojiText(allText);
+      if (extraRoutes) {
+        const names = new Set(routes.map((r) => r.name.toLowerCase()));
+        for (const r of extraRoutes) {
+          if (!names.has(r.name.toLowerCase())) {
+            routes.push(r);
+            names.add(r.name.toLowerCase());
+          }
+        }
+      }
+
+      const cleanBefore = before
+        ? stripEmojiRouteBlocks(cleanVisibleText(before))
+        : "";
+      if (cleanBefore) segments.push({ type: "text", content: cleanBefore });
+      segments.push({ type: "routes", routes });
+      const cleanAfter = after
+        ? stripEmojiRouteBlocks(cleanVisibleText(after))
+        : "";
+      if (cleanAfter) segments.push({ type: "text", content: cleanAfter });
       return segments;
     }
   }
